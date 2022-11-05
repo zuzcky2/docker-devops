@@ -1,0 +1,35 @@
+##################### [CUSTOM SETTING - Jinsoo.Kim<jjambbongjoa@gmail.com>] #####################
+[mysqld]
+server-id=1
+log-bin=mysql-bin
+pid-file        = /var/run/mysqld/mysqld.pid
+socket          = /var/run/mysqld/mysqld.sock
+datadir         = /var/lib/mysql
+secure-file-priv= NULL
+
+auto_increment_increment=1
+auto_increment_offset=1
+
+character-set-server=utf8mb4
+collation-server=utf8mb4_unicode_ci
+skip-character-set-client-handshake
+
+default-storage-engine = InnoDB
+
+
+# error log 위치
+log-error = /docker-volumes/log/mysql_error.log
+
+# general log 설정 및 위치
+general_log=1
+general_log_file = /docker-volumes/log/mysql_history.log
+
+# slow, long query 설정
+slow-query-log = 1                   # log file 쌓기
+long_query_time = 10                 # 해당 초 이상 소요된 쿼리에 대한 정보 logging
+slow_query_log_file = /docker-volumes/log/mysql_slow.log
+
+################################################################################################
+
+# Custom config should go here
+!includedir /etc/mysql/conf.d/

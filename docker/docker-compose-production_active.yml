@@ -1,0 +1,220 @@
+version: '3'
+services:
+  certbot:
+    build: certbot
+    user: root
+    environment:
+      SERVER_NAME: ${SERVER_NAME}
+      MAINTAINER: ${MAINTAINER}
+    extra_hosts:
+      - ${SERVER_NAME}:${HOST_ADDRESS}
+    volumes:
+      - ${DOCKER_ROOT}/certbot:${__CONTAINER_ROOT__}/docker
+      - ${__CONFIG_VOLUME__}/certbot/lib:/etc/letsencrypt
+      - ${__CONFIG_VOLUME__}/certbot/var:/var/lib/letsencrypt
+      - ${__CONFIG_VOLUME__}/aws/credentials:/root/.aws/credentials
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --dns-route53; sleep 24h & wait $${!}; done;'"
+    networks:
+      - infra
+    restart: unless-stopped
+
+  haproxy:
+    build: haproxy
+    platform: linux/x86_64
+    environment:
+      SERVER_NAME: ${SERVER_NAME}
+      WEB_SERVER_NAME: ${WEB_SERVER_NAME}
+      API_SERVER_NAME: ${API_SERVER_NAME}
+      STATIC_SERVER_NAME: ${STATIC_SERVER_NAME}
+      SOCKET_SERVER_NAME: ${SOCKET_SERVER_NAME}
+    extra_hosts:
+      - ${SERVER_NAME}:${HOST_ADDRESS}
+      - ${WEB_SERVER_NAME}:${HOST_ADDRESS}
+      - ${API_SERVER_NAME}:${HOST_ADDRESS}
+      - ${STATIC_SERVER_NAME}:${HOST_ADDRESS}
+      - ${SOCKET_SERVER_NAME}:${HOST_ADDRESS}
+    ports:
+      - ${__HAPROXY_HTTP__}:${__HAPROXY_HTTP__}
+      - ${__HAPROXY_HTTPS__}:${__HAPROXY_HTTPS__}
+      - ${__HAPROXY_STATS__}:1936
+      - ${__HAPROXY_MONGODB__}:27017
+      - ${__HAPROXY_MYSQL_}:3306
+    command: [ "haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg" ]
+    volumes:
+      - ${__CONFIG_VOLUME__}/certbot/lib:/etc/letsencrypt
+      - ${DOCKER_ROOT}/haproxy:${__CONTAINER_ROOT__}/docker
+    links:
+      - nginx
+      - mongodb
+      - mysql
+    restart: unless-stopped
+    networks:
+      - infra
+
+  nginx:
+    build: nginx
+    platform: linux/x86_64
+    environment:
+      SERVER_NAME: ${SERVER_NAME}
+      WEB_SERVER_NAME: ${WEB_SERVER_NAME}
+      API_SERVER_NAME: ${API_SERVER_NAME}
+      STATIC_SERVER_NAME: ${STATIC_SERVER_NAME}
+      SOCKET_SERVER_NAME: ${SOCKET_SERVER_NAME}
+      WEB_URL: ${WEB_URL}
+      API_URL: ${API_URL}
+      STATIC_URL: ${STATIC_URL}
+      SOCKET_URL: ${SOCKET_URL}
+      NGINX_ENV: ${NGINX_ENV}
+    extra_hosts:
+      - ${SERVER_NAME}:${HOST_ADDRESS}
+      - ${WEB_SERVER_NAME}:${HOST_ADDRESS}
+      - ${API_SERVER_NAME}:${HOST_ADDRESS}
+      - ${STATIC_SERVER_NAME}:${HOST_ADDRESS}
+      - ${SOCKET_SERVER_NAME}:${HOST_ADDRESS}
+    volumes:
+      - ${DOCKER_ROOT}/nginx:${__CONTAINER_ROOT__}/docker
+      - ${PROJECT_ROOT}/php:${__CONTAINER_ROOT__}/php
+      - ${PROJECT_ROOT}/nodejs:${__CONTAINER_ROOT__}/nodejs
+      - ${__STATIC_VOLUME__}:${__CONTAINER_ROOT__}/static
+      - ${__DIST_VOLUME__}:${__CONTAINER_ROOT__}/dist
+      - ${__THEPAY_IMAGE_VOLUME__}:${__CONTAINER_ROOT__}/share
+      - ${__LOG_VOLUME__}/nginx:${__CONTAINER_ROOT__}/log
+    links:
+      - php-fpm
+      - anaconda
+      - nodejs
+    restart: unless-stopped
+    command: ["nginx"]
+    networks:
+      - infra
+
+  anaconda:
+    build: anaconda
+    platform: linux/x86_64
+    extra_hosts:
+      - ${SERVER_NAME}:${HOST_ADDRESS}
+      - ${JUPYTER_SERVER_NAME}:${HOST_ADDRESS}
+      - ${SCIENCE_SERVER_NAME}:${HOST_ADDRESS}
+    environment:
+      ANACONDA_ENV: ${ANACONDA_ENV}
+      SERVER_NAME: ${SERVER_NAME}
+      SCIENCE_SERVER_NAME: ${SCIENCE_SERVER_NAME}
+      SCIENCE_URL: ${SCIENCE_URL}
+      JUPYTER_SERVER_NAME: ${JUPYTER_SERVER_NAME}
+      JUPYTER_URL: ${JUPYTER_URL}
+      PROJECT_ROOT: ${__CONTAINER_ROOT__}/python
+    volumes:
+      - ${DOCKER_ROOT}/anaconda:${__CONTAINER_ROOT__}/docker
+      - ${__CONFIG_VOLUME__}/anaconda:${__CONTAINER_ROOT__}/config
+      - ${__LOG_VOLUME__}/anaconda:${__CONTAINER_ROOT__}/log
+      - ${__DATA_VOLUME__}/anaconda:${__CONTAINER_ROOT__}/data
+      - ${PROJECT_ROOT}/python:${__CONTAINER_ROOT__}/python
+    working_dir: ${__CONTAINER_ROOT__}/python
+    entrypoint: ['sh', '/var/workspace/docker/api-up.sh']
+    networks:
+      - infra
+    restart: unless-stopped
+
+  php-fpm:
+    build: php-fpm
+    platform: linux/x86_64
+    volumes:
+      - ${DOCKER_ROOT}/php-fpm:${__CONTAINER_ROOT__}/docker
+      - ${__STATIC_VOLUME__}:${__CONTAINER_ROOT__}/static
+      - ${__LOG_VOLUME__}/php-fpm:${__CONTAINER_ROOT__}/log
+      - ${__CONFIG_VOLUME__}/php-fpm:${__CONTAINER_ROOT__}/config
+      - ${PROJECT_ROOT}/php:${__CONTAINER_ROOT__}/php
+    environment:
+      - API_TOKEN=${FIXED_MASTER_TOKEN}
+      - PHP_ENV=${PHP_FPM_ENV}
+    extra_hosts:
+      - ${SERVER_NAME}:${HOST_ADDRESS}
+      - ${WEB_SERVER_NAME}:${HOST_ADDRESS}
+      - ${API_SERVER_NAME}:${HOST_ADDRESS}
+      - ${STATIC_SERVER_NAME}:${HOST_ADDRESS}
+      - ${SOCKET_SERVER_NAME}:${HOST_ADDRESS}
+    restart: unless-stopped
+    working_dir: ${__CONTAINER_ROOT__}/php
+    command: [ "php-fpm", "-F" ]
+    networks:
+      - infra
+
+  nodejs:
+    build: nodejs
+    platform: linux/x86_64
+    volumes:
+      - ${DOCKER_ROOT}/nodejs:${__CONTAINER_ROOT__}/docker
+      - ${__STATIC_VOLUME__}:${__CONTAINER_ROOT__}/static
+      - ${__LOG_VOLUME__}/nodejs:${__CONTAINER_ROOT__}/log
+      - ${PROJECT_ROOT}/nodejs:${__CONTAINER_ROOT__}/nodejs
+    working_dir: ${__CONTAINER_ROOT__}/nodejs
+    restart: unless-stopped
+    networks:
+      - infra
+
+  mongodb:
+    build: mongodb
+    restart: unless-stopped
+    working_dir: ${__CONTAINER_ROOT__}
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_INITDB_USERNAME: ${MONGO_INITDB_USERNAME}
+      MONGO_INITDB_PASSWORD: ${MONGO_INITDB_PASSWORD}
+    ports:
+      - ${__MONGODB_OPEN_PORT__}:27017
+    volumes:
+      - ${DOCKER_ROOT}/mongodb:${__CONTAINER_ROOT__}/docker
+      - ${__DATA_VOLUME__}/mongodb/db:/data/db:delegated
+      - ${__LOG_VOLUME__}/mongodb:/var/log/mongodb
+    extra_hosts:
+      - mongodb-master:${ACTIVE_IP}
+      - mongodb-secondary:${STANDBY_IP}
+    command: mongod -f /etc/mongod.conf --replSet replication
+    networks:
+      - infra
+
+  mysql:
+    build: mysql
+    platform: linux/x86_64
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    restart: unless-stopped
+    working_dir: ${__CONTAINER_ROOT__}
+    ports:
+      - ${__MYSQL_OPEN_PORT__}:3306
+    environment:
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_REPLICATION_USER=${MYSQL_REPLICATION_USER}
+      - MYSQL_REPLICATION_HOST=${MYSQL_REPLICATION_HOST}
+      - MYSQL_REPLICATION_PASS=${MYSQL_REPLICATION_PASS}
+      - MYSQL_REPLICATION_MASTER_PASS=${MYSQL_REPLICATION_MASTER_PASS}
+      - MYSQL_INITDB_SKIP_TZINFO=${MYSQL_INITDB_SKIP_TZINFO}
+    volumes:
+      - ${__DATA_VOLUME__}/mysql/db:/var/lib/mysql:delegated
+      - ${__LOG_VOLUME__}/mysql:/docker-volumes/log
+      - ${DOCKER_ROOT}/mysql:${__CONTAINER_ROOT__}/docker
+    networks:
+      - infra
+
+  logrotate:
+    build: logrotate
+    platform: linux/amd64
+    restart: unless-stopped
+    user: root
+    networks:
+      - infra
+    environment:
+      - CRON_EXPR="* * * * *"
+      - LOGROTATE_LOGFILES=/var/log/logs/*/*.log
+      - LOGROTATE_FILESIZE=10M
+      - LOGROTATE_FILENUM=5
+    volumes:
+      - ${__LOG_VOLUME__}:/var/log/logs:rw
+
+networks:
+  infra:
+    external: true

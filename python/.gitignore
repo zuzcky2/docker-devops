@@ -1,0 +1,7 @@
+.env
+.ipynb_checkpoints
+*.csv
+*.numbers
+*.py
+!main.py
+__pycache__
