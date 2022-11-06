@@ -77,7 +77,6 @@ services:
       - ${PROJECT_ROOT}/nodejs:${__CONTAINER_ROOT__}/nodejs
       - ${__STATIC_VOLUME__}:${__CONTAINER_ROOT__}/static
       - ${__DIST_VOLUME__}:${__CONTAINER_ROOT__}/dist
-      - ${__THEPAY_IMAGE_VOLUME__}:${__CONTAINER_ROOT__}/share
       - ${__LOG_VOLUME__}/nginx:${__CONTAINER_ROOT__}/log
     links:
       - php-fpm
