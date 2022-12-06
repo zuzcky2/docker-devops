@@ -52,6 +52,6 @@ if [ ! -f php-fpm/options.ini ]; then
 fi
 
 if [ ! -f ../php/.env ]; then
-    cp "../php/.env.example.$environment_mode" ../php/.env
+    cp "../php/.env.example" ../php/.env
     echo -e "${MSG_PREFIX}../php/.env 생성 완료\n"
 fi
